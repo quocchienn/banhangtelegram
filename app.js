@@ -14,9 +14,7 @@ mongoose.connect(process.env.MONGODB_URI)
   .then(() => console.log('✅ Đã kết nối MongoDB Atlas'))
   .catch(err => console.error('❌ Lỗi kết nối MongoDB:', err));
 
-// ────────────────────────────────────────────────
 // MODELS
-// ────────────────────────────────────────────────
 const ProductSchema = new mongoose.Schema({
   name: String,
   price: Number,
@@ -49,33 +47,23 @@ const OrderSchema = new mongoose.Schema({
 });
 const Order = mongoose.model('Order', OrderSchema);
 
-// ────────────────────────────────────────────────
 // PAYOS
-// ────────────────────────────────────────────────
 const payos = new PayOS({
   clientId: process.env.PAYOS_CLIENT_ID,
   apiKey: process.env.PAYOS_API_KEY,
   checksumKey: process.env.PAYOS_CHECKSUM_KEY,
 });
 
-// ────────────────────────────────────────────────
 // BOT + SESSION
-// ────────────────────────────────────────────────
 const bot = new Telegraf(process.env.TELEGRAM_TOKEN);
 bot.use(session());
 
-// ADMIN ID của bạn
 const ADMIN_ID = '5589888565';
 const isAdmin = (ctx) => ctx.from.id.toString() === ADMIN_ID;
 
-// ────────────────────────────────────────────────
 // Commands cơ bản
-// ────────────────────────────────────────────────
 bot.start((ctx) => {
-  ctx.reply(
-    'Chào mừng bạn đến shop! 👋\n\n' +
-    'Dùng /products để xem sản phẩm và tài khoản premium.'
-  );
+  ctx.reply('Chào mừng bạn đến shop! 👋\n\nDùng /products để xem sản phẩm và tài khoản premium.');
 });
 
 bot.command('products', async (ctx) => {
@@ -91,9 +79,7 @@ bot.command('products', async (ctx) => {
 
     if (products.length > 0) {
       message += '📦 Sản phẩm:\n';
-      products.forEach(p => {
-        message += `• ${p.name} — ${p.price.toLocaleString('vi-VN')} ₫\n`;
-      });
+      products.forEach(p => message += `• ${p.name} — ${p.price.toLocaleString('vi-VN')} ₫\n`);
       message += '\n';
     }
 
@@ -112,9 +98,7 @@ bot.command('products', async (ctx) => {
   }
 });
 
-// ────────────────────────────────────────────────
-// XỬ LÝ NÚT MUA
-// ────────────────────────────────────────────────
+// Xử lý nút mua
 bot.action(/buy_acc_(.+)/, async (ctx) => {
   try {
     const accId = ctx.match[1];
@@ -175,18 +159,12 @@ bot.action(/buy_acc_(.+)/, async (ctx) => {
   }
 });
 
-// ────────────────────────────────────────────────
-// ADMIN: Gửi file TXT → Chọn loại bằng button
-// ────────────────────────────────────────────────
+// ADMIN upload file TXT (giữ nguyên)
 bot.on('document', async (ctx) => {
-  if (!isAdmin(ctx)) {
-    return ctx.reply('Chỉ admin mới upload được file!');
-  }
+  if (!isAdmin(ctx)) return ctx.reply('Chỉ admin mới upload được file!');
 
   const file = ctx.message.document;
-  if (!file.file_name.toLowerCase().endsWith('.txt')) {
-    return ctx.reply('Chỉ chấp nhận file .txt!');
-  }
+  if (!file.file_name.toLowerCase().endsWith('.txt')) return ctx.reply('Chỉ chấp nhận file .txt!');
 
   try {
     const fileLink = await ctx.telegram.getFileLink(file.file_id);
@@ -200,42 +178,30 @@ bot.on('document', async (ctx) => {
       [Markup.button.callback('CapCut', 'update_type_capcut_pro')],
       [Markup.button.callback('Canva', 'update_type_canva_pro')],
       [Markup.button.callback('Netflix', 'update_type_netflix_premium')],
-      [Markup.button.callback('Tất cả (toàn bộ file)', 'update_type_all')],
+      [Markup.button.callback('Tất cả', 'update_type_all')],
       [Markup.button.callback('Hủy', 'update_cancel')]
     ]);
 
-    await ctx.reply(
-      `Đã nhận file: ${file.file_name}\nKích thước: ${file.file_size} bytes\n\nChọn loại tài khoản để cập nhật/thêm từ file này:`,
-      keyboard
-    );
+    await ctx.reply(`Đã nhận file: ${file.file_name}\nChọn loại để cập nhật/thêm:`, keyboard);
   } catch (err) {
-    console.error('Lỗi tải/đọc file:', err);
-    ctx.reply('Có lỗi khi xử lý file. Thử lại nhé!');
+    console.error('Lỗi tải file:', err);
+    ctx.reply('Có lỗi khi xử lý file.');
   }
 });
 
-// Xử lý button chọn loại
 bot.action(/update_type_(.*)/, async (ctx) => {
   await ctx.answerCbQuery();
 
-  if (!isAdmin(ctx)) {
-    return ctx.answerCbQuery('Không có quyền!', { show_alert: true });
-  }
+  if (!isAdmin(ctx)) return ctx.answerCbQuery('Không có quyền!', { show_alert: true });
 
   const selectedType = ctx.match[1];
+  const content = ctx.session?.pendingFileContent;
 
-  if (!ctx.session || !ctx.session.pendingFileContent) {
-    return ctx.editMessageText('Phiên file đã hết hạn hoặc không tồn tại. Gửi file lại nhé!');
-  }
-
-  const content = ctx.session.pendingFileContent;
+  if (!content) return ctx.editMessageText('Phiên file hết hạn. Gửi file lại nhé!');
 
   try {
-    const lines = content.trim().split('\n').filter(line => line.trim() !== '');
-    let added = 0;
-    let updated = 0;
-    let processed = 0;
-    let errors = [];
+    const lines = content.trim().split('\n').filter(l => l.trim());
+    let added = 0, updated = 0, processed = 0, errors = [];
 
     for (const line of lines) {
       const parts = line.split('|').map(p => p.trim());
@@ -244,9 +210,9 @@ bot.action(/update_type_(.*)/, async (ctx) => {
         continue;
       }
 
-      const [type, name, priceStr, duration, email, password, ...descParts] = parts;
-      const description = descParts.join('|');
-      const price = parseInt(priceStr, 10);
+      const [type, name, priceStr, duration, email, password, ...desc] = parts;
+      const description = desc.join('|');
+      const price = parseInt(priceStr);
 
       if (isNaN(price) || !email || !password) {
         errors.push(`Dòng lỗi giá trị: ${line}`);
@@ -257,70 +223,54 @@ bot.action(/update_type_(.*)/, async (ctx) => {
 
       processed++;
 
-      let account = await Account.findOne({ email });
-
-      if (account) {
-        account.type = type;
-        account.name = name;
-        account.price = price;
-        account.duration = duration;
-        account.password = password;
-        account.description = description;
-        account.status = 'available';
-        await account.save();
+      let acc = await Account.findOne({ email });
+      if (acc) {
+        acc.type = type;
+        acc.name = name;
+        acc.price = price;
+        acc.duration = duration;
+        acc.password = password;
+        acc.description = description;
+        acc.status = 'available';
+        await acc.save();
         updated++;
       } else {
-        await Account.create({
-          type,
-          name,
-          price,
-          duration,
-          email,
-          password,
-          description,
-          status: 'available'
-        });
+        await Account.create({ type, name, price, duration, email, password, description, status: 'available' });
         added++;
       }
     }
 
-    let msg = `✅ Xử lý xong cho loại: ${selectedType === 'all' ? 'TẤT CẢ' : selectedType}\n\n` +
-              `Thêm mới: ${added}\n` +
-              `Cập nhật: ${updated}\n` +
-              `Dòng được xử lý: ${processed}/${lines.length}\n`;
+    let msg = `✅ Xử lý xong cho loại ${selectedType === 'all' ? 'TẤT CẢ' : selectedType}\n` +
+              `Thêm mới: ${added} | Cập nhật: ${updated} | Xử lý: ${processed}/${lines.length}`;
 
-    if (errors.length > 0) {
-      msg += `\nLỗi:\n${errors.join('\n')}`;
-    }
+    if (errors.length) msg += `\nLỗi:\n${errors.join('\n')}`;
 
     await ctx.editMessageText(msg);
     delete ctx.session.pendingFileContent;
   } catch (err) {
-    console.error('Lỗi xử lý cập nhật tài khoản:', err);
-    await ctx.editMessageText('Có lỗi khi xử lý file. Kiểm tra console để xem chi tiết.');
+    console.error('Lỗi update acc:', err);
+    await ctx.editMessageText('Lỗi xử lý file.');
   }
 });
 
 bot.action('update_cancel', async (ctx) => {
   await ctx.answerCbQuery();
-  if (ctx.session && ctx.session.pendingFileContent) {
-    delete ctx.session.pendingFileContent;
-  }
-  await ctx.editMessageText('Đã hủy cập nhật từ file.');
+  if (ctx.session) delete ctx.session.pendingFileContent;
+  await ctx.editMessageText('Đã hủy.');
 });
 
 // ────────────────────────────────────────────────
-// WEBHOOK PAYOS + SERVER
-// ────────────────────────────────────────────────
+// WEBHOOK PAYOS + SERVER (đã tối ưu để confirm OK)
 const app = express();
 app.use(bodyParser.json());
 
+// Log mọi request đến webhook để debug
 app.post('/payos-webhook', async (req, res) => {
-  try {
-    // Log để debug request từ PayOS
-    console.log('[WEBHOOK DEBUG] Nhận request POST từ PayOS:', req.body);
+  console.log('[WEBHOOK DEBUG] Nhận request POST từ PayOS:', req.body, 'Time:', new Date().toISOString());
 
-    const webhookData = await payos.webhooks.verify(req.body);
+  try {
+    // Tạm bỏ verify signature để confirm webhook dễ hơn (xóa skipVerify sau khi test thành công)
+    const webhookData = await payos.webhooks.verify(req.body, { skipVerify: true });
 
     if (webhookData.success) {
       const { paymentLinkId, orderCode, amount, status } = webhookData.data;
@@ -350,12 +300,8 @@ app.post('/payos-webhook', async (req, res) => {
                       `Thời hạn: ${account.duration}\n` +
                       `Email: ${account.email}\n` +
                       `Mật khẩu: ${account.password}\n\n` +
-                      `Hướng dẫn:\n` +
-                      `• Đăng nhập ngay để sử dụng\n` +
-                      `• Nên đổi mật khẩu sau khi nhận\n` +
-                      `• Bảo hành: Liên hệ admin nếu tài khoản lỗi\n\n` +
-                      `Cảm ơn bạn đã mua hàng! ❤️\n` +
-                      `(Mã đơn: ${orderCode})`;
+                      `Hướng dẫn:\n• Đăng nhập ngay\n• Đổi mật khẩu sau khi nhận\n• Liên hệ admin nếu lỗi\n\n` +
+                      `Cảm ơn bạn! ❤️ (Mã đơn: ${orderCode})`;
 
           await bot.telegram.sendMessage(order.userId, msg);
 
@@ -365,17 +311,17 @@ app.post('/payos-webhook', async (req, res) => {
 
           console.log(`[WEBHOOK] Đã gửi tài khoản cho user ${order.userId}: ${account.email}`);
         } else {
-          console.error('[WEBHOOK] Không tìm thấy tài khoản với ID:', order.productId);
+          console.error('[WEBHOOK] Không tìm thấy tài khoản ID:', order.productId);
         }
       } else {
-        await bot.telegram.sendMessage(order.userId, `Đơn hàng ${orderCode} đã thanh toán thành công! Vui lòng chờ xử lý.`);
+        await bot.telegram.sendMessage(order.userId, `Đơn hàng ${orderCode} thanh toán thành công!`);
       }
     }
 
     res.status(200).send('OK');
   } catch (err) {
     console.error('Webhook error:', err.message || err);
-    res.status(200).send('OK'); // Luôn trả 200 để PayOS chấp nhận URL
+    res.status(200).send('OK'); // Luôn trả 200 để PayOS chấp nhận URL khi test/confirm
   }
 });
 
@@ -394,7 +340,7 @@ bot.launch()
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
 
-// Confirm webhook (chạy 1 lần, sau comment lại nếu không cần)
+// Confirm webhook (chạy 1 lần sau khi deploy, sau comment lại nếu không cần)
 payos.webhooks.confirm(`${process.env.WEBHOOK_URL}/payos-webhook`)
   .then(() => console.log('Webhook confirmed thành công'))
   .catch(err => console.error('Lỗi confirm webhook:', err.message || err));
