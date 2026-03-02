@@ -159,7 +159,7 @@ bot.action(/buy_acc_(.+)/, async (ctx) => {
   }
 });
 
-// ADMIN upload file TXT (giữ nguyên)
+// ADMIN upload file TXT và xử lý button chọn loại (giữ nguyên)
 bot.on('document', async (ctx) => {
   if (!isAdmin(ctx)) return ctx.reply('Chỉ admin mới upload được file!');
 
@@ -260,16 +260,20 @@ bot.action('update_cancel', async (ctx) => {
 });
 
 // ────────────────────────────────────────────────
-// WEBHOOK PAYOS + SERVER (đã tối ưu để confirm OK)
+// WEBHOOK PAYOS + SERVER (sửa để confirm OK)
 const app = express();
 app.use(bodyParser.json());
 
-// Log mọi request đến webhook để debug
 app.post('/payos-webhook', async (req, res) => {
-  console.log('[WEBHOOK DEBUG] Nhận request POST từ PayOS:', req.body, 'Time:', new Date().toISOString());
+  // Log mọi request để debug
+  console.log('[WEBHOOK DEBUG] Nhận request POST từ PayOS:', {
+    body: req.body,
+    time: new Date().toISOString(),
+    headers: req.headers['user-agent'] || 'unknown'
+  });
 
   try {
-    // Tạm bỏ verify signature để confirm webhook dễ hơn (xóa skipVerify sau khi test thành công)
+    // Tạm bỏ verify signature để PayOS accept URL (xóa skipVerify sau khi confirm OK)
     const webhookData = await payos.webhooks.verify(req.body, { skipVerify: true });
 
     if (webhookData.success) {
@@ -279,12 +283,12 @@ app.post('/payos-webhook', async (req, res) => {
       const order = await Order.findOne({ paymentLinkId });
 
       if (!order) {
-        console.error('[WEBHOOK] Không tìm thấy order với paymentLinkId:', paymentLinkId);
+        console.error('[WEBHOOK] Không tìm thấy order:', paymentLinkId);
         return res.status(200).send('OK');
       }
 
       if (order.status === 'PAID') {
-        console.log('[WEBHOOK] Đơn hàng đã PAID trước đó:', orderCode);
+        console.log('[WEBHOOK] Đơn đã PAID trước đó:', orderCode);
         return res.status(200).send('OK');
       }
 
@@ -321,7 +325,7 @@ app.post('/payos-webhook', async (req, res) => {
     res.status(200).send('OK');
   } catch (err) {
     console.error('Webhook error:', err.message || err);
-    res.status(200).send('OK'); // Luôn trả 200 để PayOS chấp nhận URL khi test/confirm
+    res.status(200).send('OK'); // Luôn trả 200 để PayOS accept URL khi test/confirm
   }
 });
 
@@ -340,7 +344,7 @@ bot.launch()
 process.once('SIGINT', () => bot.stop('SIGINT'));
 process.once('SIGTERM', () => bot.stop('SIGTERM'));
 
-// Confirm webhook (chạy 1 lần sau khi deploy, sau comment lại nếu không cần)
+// Confirm webhook (chạy 1 lần sau deploy, sau comment lại nếu không cần)
 payos.webhooks.confirm(`${process.env.WEBHOOK_URL}/payos-webhook`)
   .then(() => console.log('Webhook confirmed thành công'))
   .catch(err => console.error('Lỗi confirm webhook:', err.message || err));
